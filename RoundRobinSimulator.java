@@ -4,6 +4,7 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.*;
+import java.util.Queue;
 
 class Process {
     String name;
@@ -174,6 +175,12 @@ public class RoundRobinSimulator {
             SystemInterrupt currentSystemInterrupt = null;
             int systemInterruptRemaining = 0;
 
+            // Apply the initial delay (overhead)
+            for (int i = 0; i < delay; i++) {
+                result.append("Time ").append(time).append(": Delay\n");
+                time++;
+            }
+
             while (!readyQueue.isEmpty() || !blockedQueue.isEmpty() || systemInterruptRemaining > 0) {
                 if (currentSystemInterrupt != null && systemInterruptRemaining > 0) {
                     for (int i = 0; i < quantum && systemInterruptRemaining > 0; i++) {
@@ -229,8 +236,6 @@ public class RoundRobinSimulator {
                     }
 
                     if (process.remainingTime > 0) {
-                        result.append("Time ").append(time).append(": Process ").append(process.name).append(" is running\n");
-
                         int quantumRemaining = quantum;
                         while (quantumRemaining > 0 && process.remainingTime > 0) {
                             result.append("Time ").append(time).append(": Process ").append(process.name).append(" is running\n");
@@ -259,17 +264,14 @@ public class RoundRobinSimulator {
                 }
 
                 if (currentSystemInterrupt == null && readyQueue.isEmpty() && blockedQueue.isEmpty()) {
-                    time++;
                     result.append("Time ").append(time).append(": Idle\n");
+                    time++;
                 }
             }
 
             outputArea.setText(result.toString());
         } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(frame, "Please enter valid quantum and delay values.");
-        }
+            JOptionPane.showMessageDialog(frame, "Please enter valid numbers for quantum and delay.");
+      }
     }
 }
-
-
-
