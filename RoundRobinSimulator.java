@@ -72,6 +72,7 @@ public class RoundRobinSimulator {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.getContentPane().setLayout(new BorderLayout());
 
+        // Panel para los campos de entrada
         JPanel inputPanel = new JPanel();
         frame.getContentPane().add(inputPanel, BorderLayout.NORTH);
 
@@ -175,7 +176,7 @@ public class RoundRobinSimulator {
             SystemInterrupt currentSystemInterrupt = null;
             int systemInterruptRemaining = 0;
 
-            // Apply the initial delay (overhead)
+            // Aplicar el retardo inicial (overhead)
             for (int i = 0; i < delay; i++) {
                 result.append("Time ").append(time).append(": Delay\n");
                 time++;
@@ -243,10 +244,7 @@ public class RoundRobinSimulator {
                             quantumRemaining--;
                             process.remainingTime--;
                             process.quantumUsed++;
-                            if (quantumRemaining > 0 && process.remainingTime > 0) {
-                                result.append("Time ").append(time).append(": Delay\n");
-                                time++;
-                            }
+                
                         }
 
                         if (process.remainingTime > 0) {
@@ -255,6 +253,9 @@ public class RoundRobinSimulator {
                             finishedProcesses.add(process.name);
                             result.append("Process ").append(process.name).append(" finished at time ").append(time).append("\n");
                         }
+                        // Aplicar delay después de que el quantum haya sido utilizado
+                        result.append("Time ").append(time).append(": Delay\n");
+                        time++;
                     }
                 }
 
