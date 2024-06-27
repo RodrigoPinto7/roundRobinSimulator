@@ -157,7 +157,7 @@ public class RoundRobinSimulator {
         try {
             int quantum = Integer.parseInt(quantumField.getText());
             int delay = Integer.parseInt(delayField.getText());
-
+    
             Queue<Process> queue = new LinkedList<>();
             for (int i = 0; i < tableModel.getRowCount(); i++) {
                 String name = (String) tableModel.getValueAt(i, 0);
@@ -167,112 +167,96 @@ public class RoundRobinSimulator {
                 int interruptDuration = (int) tableModel.getValueAt(i, 4);
                 queue.add(new Process(name, arrivalTime, burstTime, interruptTime, interruptDuration));
             }
-
+    
             int time = 0;
             StringBuilder result = new StringBuilder();
             Queue<Process> readyQueue = new LinkedList<>(queue);
             Queue<Process> blockedQueue = new LinkedList<>();
             Set<String> finishedProcesses = new HashSet<>();
-            SystemInterrupt currentSystemInterrupt = null;
-            int systemInterruptRemaining = 0;
-
-            // Aplicar el retardo inicial (overhead)
+            Process currentProcess = null;
+            int executedUnits = 0;
+    
+            // Aplicar el delay inicial (overhead)
             for (int i = 0; i < delay; i++) {
                 result.append("Time ").append(time).append(": Delay\n");
                 time++;
             }
-
-            while (!readyQueue.isEmpty() || !blockedQueue.isEmpty() || systemInterruptRemaining > 0) {
-                if (currentSystemInterrupt != null && systemInterruptRemaining > 0) {
-                    for (int i = 0; i < quantum && systemInterruptRemaining > 0; i++) {
-                        result.append("Time ").append(time).append(": System interrupt executing\n");
+    
+            while (!readyQueue.isEmpty() || !blockedQueue.isEmpty() || currentProcess != null) {
+                // Procesar interrupciones
+                if (currentProcess != null && currentProcess.interrupted) {
+                    int interruptTimeRemaining = currentProcess.interruptDuration;
+                    while (interruptTimeRemaining > 0) {
+                        result.append("Time ").append(time).append(": Process ").append(currentProcess.name)
+                              .append(" interrupt\n");
                         time++;
-                        systemInterruptRemaining--;
-                        if (systemInterruptRemaining > 0 && i < quantum - 1) {
+                        interruptTimeRemaining--;
+                        executedUnits++;
+                        if (executedUnits == 2) {
                             result.append("Time ").append(time).append(": Delay\n");
                             time++;
+                            executedUnits = 0;
                         }
                     }
-                    if (systemInterruptRemaining <= 0) {
-                        currentSystemInterrupt = null;
-                    }
+                    blockedQueue.add(currentProcess);
+                    currentProcess = null;
                     continue;
                 }
-
-                if (currentSystemInterrupt == null && !systemInterrupts.isEmpty()) {
-                    for (SystemInterrupt si : systemInterrupts) {
-                        if (si.time == time) {
-                            currentSystemInterrupt = si;
-                            systemInterruptRemaining = si.duration;
-                            break;
-                        }
-                    }
-                }
-
-                Process process = readyQueue.poll();
-
-                if (process != null) {
-                    if (process.quantumUsed >= process.interruptTime && !process.interrupted) {
-                        process.interrupted = true;
-                        result.append("Time ").append(time).append(": Process ").append(process.name)
-                              .append(" interrupted for ").append(process.interruptDuration).append(" units\n");
-
-                        int interruptRemaining = process.interruptDuration;
-                        while (interruptRemaining > 0) {
-                            int interruptQuantum = Math.min(interruptRemaining, quantum);
-                            for (int i = 0; i < interruptQuantum; i++) {
-                                result.append("Time ").append(time).append(": Process ").append(process.name)
-                                      .append(" interrupt executing\n");
-                                time++;
-                                interruptRemaining--;
-                                if (interruptRemaining > 0 && i < interruptQuantum - 1) {
-                                    result.append("Time ").append(time).append(": Delay\n");
-                                    time++;
-                                }
-                            }
-                        }
-
-                        blockedQueue.add(process);
-                        continue;
-                    }
-
-                    if (process.remainingTime > 0) {
-                        int quantumRemaining = quantum;
-                        while (quantumRemaining > 0 && process.remainingTime > 0) {
-                            result.append("Time ").append(time).append(": Process ").append(process.name).append(" is running\n");
-                            time++;
-                            quantumRemaining--;
-                            process.remainingTime--;
-                            process.quantumUsed++;
-                
-                        }
-
-                        if (process.remainingTime > 0) {
-                            readyQueue.add(process);
-                        } else {
-                            finishedProcesses.add(process.name);
-                            result.append("Process ").append(process.name).append(" finished at time ").append(time).append("\n");
-                        }
-                        // Aplicar delay después de que el quantum haya sido utilizado
-                        result.append("Time ").append(time).append(": Delay\n");
-                        time++;
-                    }
-                }
-
+    
+                // Mover procesos de la cola de bloqueados a la cola de listos
                 if (!blockedQueue.isEmpty()) {
                     readyQueue.addAll(blockedQueue);
                     blockedQueue.clear();
                 }
-
-                if (currentSystemInterrupt == null && readyQueue.isEmpty() && blockedQueue.isEmpty()) {
+    
+                // Procesar el siguiente proceso en la cola de listos
+                if (currentProcess == null && !readyQueue.isEmpty()) {
+                    currentProcess = readyQueue.poll();
+                }
+    
+                if (currentProcess != null) {
+                    int quantumRemaining = quantum;
+                    while (quantumRemaining > 0 && currentProcess.remainingTime > 0) {
+                        result.append("Time ").append(time).append(": Process ").append(currentProcess.name).append(" is running\n");
+                        time++;
+                        quantumRemaining--;
+                        currentProcess.remainingTime--;
+                        currentProcess.quantumUsed++;
+                        executedUnits++;
+    
+                        // Verificar si el proceso necesita ser interrumpido durante el quantum
+                        if (currentProcess.quantumUsed >= currentProcess.interruptTime && !currentProcess.interrupted) {
+                            currentProcess.interrupted = true;
+                            break;
+                        }
+    
+                        if (executedUnits == 2) {
+                            result.append("Time ").append(time).append(": Delay\n");
+                            time++;
+                            executedUnits = 0;
+                        }
+                    }
+    
+                    // Si el proceso no ha terminado, volver a añadirlo a la cola de listos
+                    if (currentProcess.remainingTime > 0 && !currentProcess.interrupted) {
+                        readyQueue.add(currentProcess);
+                    } else if (currentProcess.remainingTime == 0) {
+                        finishedProcesses.add(currentProcess.name);
+                        result.append("Process ").append(currentProcess.name).append(" finished at time ").append(time).append("\n");
+                        currentProcess = null;
+                    }
+                }
+    
+                // Verificar si el sistema está ocioso
+                if (currentProcess == null && readyQueue.isEmpty() && blockedQueue.isEmpty()) {
                     result.append("Time ").append(time).append(": Idle\n");
                     time++;
                 }
             }
-
+    
             outputArea.setText(result.toString());
         } catch (NumberFormatException e) {
             JOptionPane.showMessageDialog(frame, "Please enter valid numbers for quantum and delay.");
-      }
-    }
+        }
+    }       
 }
